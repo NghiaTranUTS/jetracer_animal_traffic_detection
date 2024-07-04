@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Detection</title>
+    <script src="static/js/socket_io.js"></script>
+    <script src="static/js/server_local.js"></script>
+    <style>
+        body {
+            font-family: 'ui-monospace', monospace;
+            margin: 0;
+            padding: 0;
+        }
+        h1 {
+            font-size: 24px;
+            margin: 10px;
+        }
+        #div_legend ul {
+            font-weight: bold;
+            font-size: 14px;
+            padding: 0;
+            list-style: none;
+        }
+        #div_legend h3 {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+        .equal-height {
+            display: flex;
+            align-items: stretch;
+            flex-direction: column;
+        }
+        .button-container {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+        }
+        .jetson_control {
+            width: calc(33.3333% - 5px); /* Adjust width to account for padding */
+            height: 40px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        #div_img img {
+            width: 100%;
+            height: auto;
+            background-color: grey;
+        }
+    </style>
+</head>
+<body>
+    <div class="equal-height">
+        <div id="div_img" style="padding: 10px;">
+            <canvas id="detectionCanvas" style="width:100%; height:auto;"></canvas>
+        </div>
+        <div id="div_legend" style="padding: 10px;">
+            <div class="button-container">
+                <button class="jetson_control" onclick="sendGetCommand('run')">Start</button>
+                <button class="jetson_control" onclick="sendGetCommand('pause')">Pause</button>
+                <button class="jetson_control" onclick="confirmStop()">Stop</button>
+            </div>
+            <br/>
+            <ul>
+                <li id="throttle">Throttle: &nbsp;0.0000</li>
+                <li id="steering">Steering: &nbsp;0.0000</li>
+                <li id="sign_name">Sign: clear</li>
+                <li id="lane_count">Lane: </li>
+            </ul>
+            <h3>Legend</h3>
+            <ul style="margin-top: 5px;">
+                <li style="color: cyan;">Lane</li>
+                <li style="color: red;">Animal: Bird</li>
+                <li style="color: yellow;">Animal: Feline</li>
+                <li style="color: white;">Animal: Herbivore</li>
+                <li style="color: red;">Sign: Stop</li>
+                <li style="color: green;">Sign: Spd 100</li>
+                <li style="color: fuchsia;">Sign: Spd 50</li>
+                <li style="color: blue;">Sign: Parking</li>
+                <li style="color: purple;">Traffic Light</li>
+            </ul>
+        </div>
+    </div>
+    <script type="text/javascript">
+        const canvas = document.getElementById('detectionCanvas');
+        const ctx = canvas.getContext('2d');
+
+        socket.on('image_update', function(data) {
+            const updateData = new ImageUpdateData(data);
+
+            const throttleElement = document.getElementById('throttle');
+            const steeringElement = document.getElementById('steering');
+            const signElement = document.getElementById('sign_name');
+            const laneElement = document.getElementById('lane_count');
+
+            const img = new Image();
+            img.src = 'data:image/jpeg;base64,' + updateData.image;
+            img.onload = function() {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                drawDetections(ctx, updateData.sign, updateData.listAnimal, updateData.logoPad);
+                drawReferenceLines(ctx, updateData.listLane, updateData.laneX)
+            };
+
+            throttleElement.innerText = 'Throttle: ' + formatNumber(updateData.throttle);
+            steeringElement.innerText = 'Steering: ' + formatNumber(updateData.steering);
+            signElement.innerText = 'Sign: ' + updateData.signName;
+            laneElement.innerText = 'Lane: ' + updateData.listLane.length;
+        });
+
+    </script>
+</body>
+</html>

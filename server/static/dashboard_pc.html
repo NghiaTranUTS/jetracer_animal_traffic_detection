@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+<!--    <meta name="viewport" content="width=device-width, initial-scale=1.0" />-->
+    <meta name="viewport" content="width=1440, maximum-scale=1.0" />
+    <title>Real-time Detection</title>
+    <script src="static/js/socket_io.js"></script>
+    <script src="static/js/server_local.js"></script>
+    <link rel="shortcut icon" type="image/png" href="https://animaproject.s3.amazonaws.com/home/favicon.png" />
+    <meta name="og:type" content="website" />
+    <meta name="twitter:card" content="photo" />
+    <link rel="stylesheet" type="text/css" href="static/css/dashboard.css" />
+    <link rel="stylesheet" type="text/css" href="static/css/styleguide.css" />
+    <link rel="stylesheet" type="text/css" href="static/css/globals.css" />
+    <style>
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        .blink {
+            animation: blink 1s infinite;
+        }
+        .low-opacity {
+            opacity: 0.1;
+        }
+        .animal-name {
+            position: absolute;
+            top: 270px;
+            left: 850px;
+            font-size: var(--font-size-xl);
+            color: red;
+            font-weight: 600;
+            font-family: var(--font-family-poppins);
+        }
+        .animal-name.clear {
+            color: white;
+        }
+        .sign-message {
+            position: absolute;
+            top: 270px; 
+            left: 850px; 
+            font-size: var(--font-size-xl);
+            color: white;
+            font-weight: 600;
+            font-family: var(--font-family-poppins);
+        }
+    </style>
+</head>
+<body style="margin: 0; background: #243545;">
+    <input type="hidden" id="anPageName" name="page" value="dashboard" />
+    <div class="container-center-horizontal">
+        <div class="dashboard screen">
+            
+            <div class="overlap-group4">
+                <div class="group-container">
+                    <div class="group-47">
+                        <div class="dashboard-1">Live Stream</div>
+                        <div class="group-133-1">
+                            <img class="battery-3" src="static/img/battery--3-@2x.png" alt="battery (3)" />
+                            <img id="speedometer" src="static/img/speedometer_non.png" alt="Speedometer" />
+                        </div>
+                        <div class="group-8">
+                            <img class="ellipse-10" src="static/img/logo.png" alt="Ellipse 10" />
+                    
+                            <div class="frame-2 frame">
+                                <div class="group-7">
+                                    <div class="overlap-group-1">
+                                        <div class="address">Road Whisper</div>
+                                    </div>
+                                </div>
+                                
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="overlap-group-container">
+                    <!-- Live stream image -->
+                    <div id="div_img" style="padding: 10px; margin-top: 100px;">
+                        <canvas id="detectionCanvas" style="width: 100%; height: auto;"></canvas>
+                    </div>
+                </div>
+                <!-- Detected sign name image -->
+                <div id="sign_name"></div>
+                <!-- Traffic signs -->
+                <img class="sign-stop sign-img" id="stop" src="static/img/sign_stop.png" alt="stop" />
+                <img class="sign-spd50 sign-img" id="spd50" src="static/img/sign_spd50.png" alt="speed limit 50" />
+                <img class="sign-spd100 sign-img" id="spd100" src="static/img/sign_spd100.png" alt="speed limit 100" />
+                <img class="sign-traffic sign-img" id="traffic" src="static/img/sign_traffic.png" alt="traffic light" />
+                <img class="sign-park sign-img" id="park" src="static/img/sign_park.png" alt="parking" />
+                <img class="sign-combine" id="sign_combine" src="static/img/sign_combine.png" /> <!-- This image always visible -->
+                <img class="car-flashing low-opacity" id="car-animal" src="static/img/car_flashing.png" alt="image" /> <!-- Car with animal -->
+                <div id="sign-message" class="sign-message">Road is clear</div> <!-- Sign message display -->
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+<script>
+    const canvas = document.getElementById('detectionCanvas');
+    const ctx = canvas.getContext('2d');
+
+    socket.on('image_update', function (data) {
+        const updateData = new ImageUpdateData(data);
+
+        const img = new Image();
+        img.src = 'data:image/jpeg;base64,' + updateData.image;
+        img.onload = function() {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            drawDetections(ctx, updateData.sign, updateData.listAnimal, updateData.logoPad);
+        };
+
+        // Handle traffic sign detection
+        const listSignEle = document.getElementsByClassName('sign-img');
+        for (let i = 0; i < listSignEle.length; i++) {
+            const signEle = listSignEle[i];
+            if (signEle.id === updateData.signName) {
+                signEle.style.opacity = '1'; // Highlight detected sign
+            } else {
+                signEle.style.opacity = '0.1'; // Dim other signs
+            }
+        }
+
+        // // Handle sign name display
+        // const signNameElement = document.getElementById('sign_name');
+        // if (updateData.signName !== 'clear') {
+        //     signNameElement.innerHTML = '<img src="static/img/sign_' + updateData.signName + '.png" alt="' + updateData.signName + '">';
+        // }
+
+
+        // Handle animal detection and update messages
+        const carAnimalElement = document.getElementById('car-animal');
+        const signMessageElement = document.getElementById('sign-message');
+        const speedImgEle = document.getElementById('speedometer');
+
+        let message = 'Road is clear';
+        switch(updateData.signName) {
+            case YoloOutput.CATE_TO_NAME.stp_sg:
+                message = 'Car is stopping..';
+                break;
+            case YoloOutput.CATE_TO_NAME.spd50:
+            case YoloOutput.CATE_TO_NAME.spd100:
+                message = 'Adjusting speed';
+                speedImgEle.classList.add('blink');
+                break;
+            case YoloOutput.CATE_TO_NAME.prk_sg:
+                message = 'Parking';
+                break;
+            case YoloOutput.CATE_TO_NAME.trf_lgt:
+                message = 'Traffic signal ahead';
+                break;
+            default:
+                if (!updateData.listAnimal || updateData.listAnimal.length === 0) {
+                    message = 'Road is clear';
+                }
+                speedImgEle.classList.remove('blink');
+                break;
+        }
+
+        if (updateData.listAnimal && updateData.listAnimal.length > 0) {
+            const detectedAnimal = updateData.listAnimal[0]; // Assuming only one animal is detected at a time
+            carAnimalElement.classList.add('blink');
+            carAnimalElement.classList.remove('low-opacity');
+            message = detectedAnimal.nameDisplay + ' detected';
+        } else {
+            carAnimalElement.classList.remove('blink');
+            carAnimalElement.classList.add('low-opacity');
+        }
+
+        signMessageElement.textContent = message;
+
+
+        if (updateData.throttle > 0.3) {
+            speedImgEle.src = 'static/img/speedometer_hgh.png';
+        } else if (updateData.throttle > 0.2) {
+            speedImgEle.src = 'static/img/speedometer_mid.png';
+        } else if (updateData.throttle > 0.1) {
+            speedImgEle.src = 'static/img/speedometer_low.png';
+        } else {
+            speedImgEle.src = 'static/img/speedometer_non.png';
+        }
+    });
+</script>

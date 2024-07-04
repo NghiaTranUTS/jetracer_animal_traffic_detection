@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Real-time Detection</title>
+    <script src="static/js/socket_io.js"></script>
+    <script src="static/js/server_local.js"></script>
+<!--    <link rel="shortcut icon" type="image/png" href="https://animaproject.s3.amazonaws.com/home/favicon.png" />-->
+    <link rel="stylesheet" type="text/css" href="static/css/dashboard-mobile.css" />
+    <link rel="stylesheet" type="text/css" href="static/css/styleguide.css" />
+    <link rel="stylesheet" type="text/css" href="static/css/globals.css" />
+    <style>
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        .blink {
+            animation: blink 1s infinite;
+        }
+        .low-opacity {
+            opacity: 0.1;
+        }
+        .detected {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #1e1e1e;
+            color: white;
+            font-family: var(--font-family-poppins);
+            padding: 10px;
+            font-size: var(--font-size-l);
+            margin: 10px 0;
+        }
+        .detection-icon-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 10px 0;
+        }
+        .detection-icon-container img {
+            height: 40px;
+            margin-right: 10px;
+            transition: opacity 0.3s;
+        }
+        .live-stream {
+            width: 100%;
+            height: auto;
+        }
+        .live-stream-label {
+            text-align: center;
+            color: white;
+            font-family: var(--font-family-poppins);
+            font-size: var(--font-size-xl);
+            margin-top: 10px;
+        }
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background-color: #1e1e1e;
+        }
+        .logo {
+            height: 40px;
+            width: auto;
+        }
+        .group-133-1 img {
+            height: 30px;
+            width: auto;
+        }
+    </style>
+</head>
+<body style="margin: 0; background: #243545;">
+    <div class="dashboard screen">
+        <div class="top-bar">
+            <div class="group-133-1">
+                <img class="battery-3" src="static/img/battery--3-@2x.png" alt="battery" />
+                <img id="speedometer" src="static/img/speedometer_non.png" alt="Group 314" />
+            </div>
+            <img class="logo" src="static/img/logo.png" alt="Logo" />
+        </div>
+        <div class="overlap-group4">
+            <div class="live-stream-label">Live Stream</div>
+            <div class="live-stream-container">
+                <canvas id="detectionCanvas" class="live-stream" ></canvas>
+            </div>
+            <div class="detection-icon-container">
+                <img id="car-animal" src="static/img/car_flashing.png" alt="Detection Icon" class="low-opacity">
+            </div>
+            <div id="detectionMessage" class="detected">
+                <span id="sign-message">Road is clear</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+<script>
+    const canvas = document.getElementById('detectionCanvas');
+    const ctx = canvas.getContext('2d');
+
+    socket.on('image_update', function (data) {
+        const updateData = new ImageUpdateData(data);
+
+        const img = new Image();
+        img.src = 'data:image/jpeg;base64,' + updateData.image;
+        img.onload = function() {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            drawDetections(ctx, updateData.sign, updateData.listAnimal, updateData.logoPad);
+        };
+
+        const carAnimalElement = document.getElementById('car-animal');
+        const signMessageElement = document.getElementById('sign-message');
+        const speedImgEle = document.getElementById('speedometer');
+
+        let message = 'Road is clear';
+
+        let signSrc = '';
+        switch(updateData.signName) {
+            case YoloOutput.CATE_TO_NAME.stp_sg:
+                message = 'Car is stopping..';
+                signSrc = 'static/img/sign_stop.png';
+                break;
+            case YoloOutput.CATE_TO_NAME.spd50:
+                message = 'Adjusting speed to 50';
+                signSrc = 'static/img/sign_spd50.png';
+                speedImgEle.classList.add('blink');
+                break;
+            case YoloOutput.CATE_TO_NAME.spd100:
+                message = 'Adjusting speed to 100';
+                signSrc = 'static/img/sign_spd100.png';
+                speedImgEle.classList.add('blink');
+                break;
+            case YoloOutput.CATE_TO_NAME.prk_sg:
+                message = 'Parking';
+                signSrc = 'static/img/sign_park.png';
+                break;
+            case YoloOutput.CATE_TO_NAME.trf_lgt:
+                message = 'Traffic signal ahead';
+                signSrc = 'static/img/sign_traffic.png';
+                break;
+            default:
+                if (!updateData.listAnimal || updateData.listAnimal.length === 0) {
+                    message = 'Road is clear';
+                }
+                speedImgEle.classList.remove('blink');
+                break;
+        }
+
+        if (updateData.listAnimal && updateData.listAnimal.length > 0) {
+            const detectedAnimal = updateData.listAnimal[0]; // Assuming only one animal is detected at a time
+            // carAnimalElement.src = 'static/img/car_flashing.png';
+            carAnimalElement.classList.add('blink');
+            carAnimalElement.classList.remove('low-opacity');
+            message = detectedAnimal.nameDisplay + ' detected, stopping the car';
+        } else {
+            carAnimalElement.classList.remove('blink');
+            carAnimalElement.classList.add('low-opacity');
+        }
+
+        // if (signSrc && !updateData.listAnimal.length) {
+        //     carAnimalElement.src = signSrc;
+        //     carAnimalElement.classList.remove('low-opacity');
+        // } else if (!updateData.listAnimal.length) {
+        //     carAnimalElement.classList.add('low-opacity');
+        // }
+
+        signMessageElement.textContent = message;
+
+        if (updateData.throttle > 0.3) {
+            speedImgEle.src = 'static/img/speedometer_hgh.png';
+        } else if (updateData.throttle > 0.2) {
+            speedImgEle.src = 'static/img/speedometer_mid.png';
+        } else if (updateData.throttle > 0.1) {
+            speedImgEle.src = 'static/img/speedometer_low.png';
+        } else {
+            speedImgEle.src = 'static/img/speedometer_non.png';
+        }
+    });
+</script>

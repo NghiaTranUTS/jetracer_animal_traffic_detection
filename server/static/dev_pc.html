@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Real-time Detection</title>
+    <script src="static/js/socket_io.js"></script>
+    <script src="static/js/server_local.js"></script>
+    <style>
+        body {
+            font-family: 'ui-monospace', monospace;
+        }
+        h1 {
+            font-family: 'ui-monospace', monospace;
+            font-size: 36px;
+            margin: 20px;
+        }
+        #div_legend ul {
+            font-family: 'ui-monospace', monospace;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        #div_legend h3 {
+            font-family: 'ui-monospace', monospace;
+            font-size: 24px;
+            margin-bottom: 1px;
+        }
+        .equal-height {
+            display: flex;
+            align-items: stretch;
+        }
+
+        .jetson_control {
+            width: 80px;
+            height: 40px;
+            font-family: 'ui-monospace', monospace;
+            font-weight: bold;
+            font-size: 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1 style="margin: 20px">Real-time Detection Result</h1>
+    <div class="equal-height">
+        <div id="div_img" style="width: fit-content; height: fit-content; padding: 10px; display: flex; align-items: center;">
+            <canvas id="detectionCanvas" style="width: 448px; height: 448px; background-color: grey;"></canvas>
+        </div>
+        <div id="div_legend" style="padding: 10px;">
+            <br/>
+            <button class="jetson_control" onclick="sendGetCommand('run')">Start</button>
+            <button class="jetson_control" onclick="sendGetCommand('pause')">Pause</button>
+            <button class="jetson_control" onclick="confirmStop()">Stop</button>
+            <br/>
+            <br/>
+            <ul>
+                <li id="throttle">Throttle: &nbsp;0.0000</li>
+                <li id="steering">Steering: &nbsp;0.0000</li>
+                <li id="sign_name">Sign: clear</li>
+            </ul>
+            <h3>Legend</h3>
+            <ul style="margin-top: 5px;">
+                <li style="color: cyan;">Lane</li>
+                <li style="color: red;">Animal: Bird</li>
+                <li style="color: yellow;">Animal: Feline</li>
+                <li style="color: white;">Animal: Herbivore</li>
+                <li style="color: red;">Sign: Stop</li>
+                <li style="color: green;">Sign: Spd 100</li>
+                <li style="color: fuchsia;">Sign: Spd 50</li>
+                <li style="color: blue;">Sign: Parking</li>
+                <li style="color: purple;">Traffic Light</li>
+            </ul>
+        </div>
+    </div>
+    <script type="text/javascript">
+        const canvas = document.getElementById('detectionCanvas');
+        const ctx = canvas.getContext('2d');
+
+        socket.on('image_update', function(data) {
+            const updateData = new ImageUpdateData(data);
+
+            const throttleElement = document.getElementById('throttle');
+            const steeringElement = document.getElementById('steering');
+            const signElement = document.getElementById('sign_name');
+            const laneElement = document.getElementById('lane_count');
+
+            const img = new Image();
+            img.src = 'data:image/jpeg;base64,' + updateData.image;
+            img.onload = function() {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                drawDetections(ctx, updateData.sign, updateData.listAnimal, updateData.logoPad);
+                drawReferenceLines(ctx, updateData.listLane, updateData.laneX)
+            };
+
+            throttleElement.innerText = 'Throttle: ' + formatNumber(updateData.throttle);
+            steeringElement.innerText = 'Steering: ' + formatNumber(updateData.steering);
+            signElement.innerText = 'Sign: ' + updateData.signName;
+            laneElement.innerText = 'Lane: ' + updateData.listLane.length;
+        });
+    </script>
+</body>
+</html>
